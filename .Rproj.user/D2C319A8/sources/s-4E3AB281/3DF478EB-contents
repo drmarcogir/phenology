@@ -1,0 +1,22 @@
+#' @title Import phenological data and overlay with grid_5km_mask_unchanged_500m
+#' @description GRASS: /media/marco/marcodata19/backupfrombigdisk/phenology/grassdata
+#' GRASS: /media/marco/marcodata19/backupfrombigdisk/phenology/grassdata
+#' location: world
+#'  mapset: PERMANENT
+#' @param intif Character vector containing list of geotifs of interest
+
+grass_phenoin<-function(intif)
+{
+  # import raster
+  system(command = paste0("r.in.gdal in=",intif," out=tmp --o"))
+  # set region
+  system(command="g.region raster=grid_5km_mask_unchanged_500m")
+  # get stats out
+  system(command=c("r.stats -An in=grid_5km_mask_unchanged_500m,tmp  > tmpstats"))
+  # read info back in with cell grid number
+  read_delim("tmpstats",delim = " ",col_names = FALSE) %>%
+    rename(cat = X1, pheno = X2) %>%
+    mutate(year = str_remove_all(basename(intif),".tif|Y_"))->tmp
+  return(tmp)
+}
+

@@ -1,0 +1,38 @@
+#' @title Upload new smaller tiles for failed tasks. 
+#' @description Creates new smaller tiles and upload them to assets in marcogiradello.
+#' @param intask Data.frame containing information on the IDs of the polygons.
+#' @param year Numeric vector indicating year of interest. This will be used to identify export tasks. 
+#' @param ingrid sf object. Old grid used to export polygons. New tiles will created using the bounding box of the old grid.
+#'
+
+ee_uploadfailed<-function(intask,year,ingrid){
+  ingrid %>%
+    inner_join(intask %>%
+                 filter(!X3=="COMPLETED") %>%
+                 mutate(polyID = str_split_fixed(X2,"_",n=4)[,4]) %>%
+                 mutate(polyID = str_split_fixed(X2,"_",n=4)[,4]) %>%
+                 mutate(polyID = as.numeric(polyID))) %>%
+    mutate(polyID = paste0(polyID,"_",year))->gridfail
+  # delete files already present on gcloud (old assets)
+  system('gsutil -m rm "gs://marco_g_assets/*"')
+  # upload assets to legacy
+  for (i in 1:dim(gridfail)[1]){
+    print(i)
+    fileout=paste0("./tmp/","poly_",gridfail[i,]$polyID,".shp")
+    st_make_grid(st_bbox(gridfail[i,]), cellsize = 0.9, square = TRUE,crs=latlon,
+                 what = "polygons") %>%
+      st_as_sf() %>%
+      rename(geometry = x) %>%
+      mutate(polyID = 1:length(geometry)) %>%
+      mutate(polyID = paste0(gridfail[i,]$polyID,"_",polyID)) %>%
+      st_write(.,fileout,delete_layer=TRUE)
+    # upload to google cloud
+    system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".shp gs://marco_g_assets/"))
+    system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".shx gs://marco_g_assets/"))
+    system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".dbf gs://marco_g_assets/"))
+    system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".prj gs://marco_g_assets/"))
+    # upload to assets
+    system(command = paste0("earthengine upload table --asset_id=users/marcogirardello/phenofixfailedexports/poly_",gridfail[i,]$polyID," gs://marco_g_assets/poly_",gridfail[i,]$polyID,".shp"))
+  }
+  return(gridfail)
+}

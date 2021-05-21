@@ -1,0 +1,26 @@
+{
+    "id": "CE4DAF38",
+    "path": "/mnt/data1tb/Dropbox/phenology/scripts/R/GEE_postprocess.R",
+    "project_path": "scripts/R/GEE_postprocess.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1621417837880.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "tempName": "Untitled1",
+        "cursorPosition": "44,22",
+        "scrollLine": "27",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1621500832,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1621500832565,
+    "read_only": false,
+    "read_only_alternatives": []
+}

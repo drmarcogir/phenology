@@ -1,0 +1,9 @@
+seq(ymd('2017-01-01'),ymd('2017-12-31'), by = '1 day')->dd
+
+
+
+
+
+tibble(ymd=dd,doy=yday(dd)) %>%
+  inner_join(tibble(doy=seq(from=1,to=365,by=16),numbering=1:length(doy))) %>%
+  print(n=200)

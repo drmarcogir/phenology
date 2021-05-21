@@ -1,0 +1,154 @@
+##############################################
+# Prepare data needed for subsequent analyses
+# GRASS: /media/marco/marcodata19/backupfrombigdisk/phenology/grassdata
+# location: world
+# mapset: PERMANENT
+#############################################
+
+library(marcoUtils);library(raster)
+library(sf);library(fasterize)
+library(tidyverse)
+
+# grid5km -----------------------------------------------------------------
+
+
+# convert world into raster
+raster(extent(world),res=0.05)->tmpr
+fasterize(world,tmpr)->tmpr1
+tmpr1[is.na(tmpr1)]<-1
+
+as_tibble(rastertodf(tmpr1)) %>%
+  mutate(value=1:length(value)) %>%
+  rasterFromXYZ(crs=latlon) %>%
+  writeRaster(filename = "./grid_grass/grid5km.tif",overwrite=TRUE)
+
+# rasterize world shapefile: resolution 0.05
+system("g.region vector=world res=0.05 -pag")
+system("v.to.rast in=world out=tmp use=cat --o")
+# set to 1 all pixels
+system("r.mapcalc 'world = tmp/tmp' --o")
+system("r.null map=world null=1")
+system("g.region raster=world -pg")
+# get coordinates for every pixel and import back into GRASS
+system(command = paste0("r.stats -lgn world  | awk '{print $1\"|\"$2\"|\"NR}' | v.in.ascii in=- out=grid5km"))
+# rasterize vector point file
+system("g.region vector=world res=0.05 -pga")
+system("v.to.rast in=grid5km out=grid5km1 use=cat --o")
+# mask for unchanged pixels
+system("r.mask raster=mask_unchanged_500m maskcats=1")
+# create new grid
+system("r.mapcalc 'grid_5km_mask_unchanged_500m =  grid5km1' --o")
+# save grid
+system("r.out.gdal in=grid5km1 out=/mnt/data1tb/Dropbox/phenology/GRASSGIS_files/grid_5km_mask_unchanged_500m.tif createopt='COMPRESS=LZW' --o")
+
+raster("./GRASSGIS_files/grid_5km_mask_unchanged_500m.tif") %>%
+  rastertodf() %>%
+  as_tibble() %>%
+  rename(cat = value)->grid5km 
+  save(grid5km,file="/mnt/data1tb/Dropbox/phenoutils/data/grid5km.rda")
+
+load("/mnt/data1tb/Dropbox/phenoutils/data/grid5km.rda")
+
+
+# forest cover 5km grid ---------------------------------------------------
+
+
+# get forest cover for each 5 km x 5 km 
+system("g.region raster=lc_2015_for -pg")
+system("r.stats -lna in=lc_2015_for,grid5km1 > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/propfor")
+system("cat /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/propfor | awk '{print $2\",\"$3}' > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/forestprop1")
+
+
+# climatology -------------------------------------------------------------
+
+
+# get climate info
+system("r.in.gdal in=/media/marco/marcodata19/data1tb_laptop/phenology/climate/wc2.1_2.5m_bio_1.tif out=bio1")
+system("r.in.gdal in=/media/marco/marcodata19/data1tb_laptop/phenology/climate/wc2.1_2.5m_bio_12.tif out=bio12")
+system("g.region raster=bio1")
+# temperature
+system("r.stats -An in=bio1,grid5km1 > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp")
+system("cat /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp | awk '{print $1\",\"$2}' > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/bio1")
+# rainfall
+system("r.stats -An in=bio12,grid5km1 > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp")
+system("cat /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp | awk '{print $1\",\"$2}' > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/bio12")
+
+
+# PFTs --------------------------------------------------------------------
+
+
+# list of pfts
+pft.l<-c("BrEv","BrDc","NeEv","NeDe")
+
+#pft_prop<-NULL
+
+for (i in 1:4){
+  print(pft.l[i])
+  # subset pft of interest and create reclass rule file
+  pft %>%
+    dplyr::filter(PFT==pft.l[i]) %>%
+    mutate(rcl=paste0(cat," = ",area_m2)) %>%
+    dplyr::select(rcl) %>%
+    write.table(.,file="./tmp/tmp",row.names=F,quote=F,col.names = F)
+  # set region
+  system("g.region raster=lc_2015")
+  # create tmp reclassified map
+  system("r.reclass in=lc_2015 out=tmp rules=/mnt/data1tb/Dropbox/phenology/tmp/tmp --o")
+  # aggregate map to 5km 
+  system("g.region raster=grid5km") 
+  system("r.resamp.stats in=tmp method=sum out=tmpsum --o")
+  # calculate proportions
+  system("r.mapcalc 'tmpfrac = tmpsum /30980073' --o")
+  # outputs map
+  system("r.stats -An in=tmpfrac,grid5km > /mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp")
+  read_delim("/mnt/data1tb/Dropbox/phenology/GRASSGIS_files/tmp",delim = " ",col_names = F) %>%
+    rename(prop = X1,cat = X2) %>%
+    mutate(pft = pft.l[i])->tmpres
+  bind_rows(tmpres,pft_prop)->pft_prop
+}  
+ 
+pft_prop %>%
+  pivot_wider(names_from = pft,values_from = prop) %>%
+  write_csv("GRASSGIS_files/pft.csv")
+
+# Jetz's product ----------------------------------------------------------------------
+
+# read in 2002 map into GRASS
+#system("r.in.gdal in=/mnt/data1tb/Dropbox/phenology/GEE_results_geotiff/Y_2002grass.tif out=y2002 --o")
+#system("g.region raster=y2002 res=0.05 -pga")
+# set year 2002 to integer
+system("r.mapcalc 'general_mask = grid_5km_mask_unchanged_500m/grid_5km_mask_unchanged_500m' --o")
+#system("g.region raster=y2002 -p")
+system("d.rast general_mask")
+#system("r.mapcalc 'jetz1 = jetz' --o")
+
+# set mask
+system("r.mask raster=general_mask maskcats=1")
+#system("r.stats -lgn jetz1 -ln | wc -l")
+system("r.mask -r")
+
+# read Jetz's map into GRASS GIS
+system("r.in.gdal in=/media/marco/marcodata19/validationmetrics/std_01_05_5km_uint16.tif out=jetz --o")
+system("d.rast jetz")
+
+# get stats out
+system("r.stats -nA in=jetz,grid_5km_mask_unchanged_500m > /mnt/data1tb/Dropbox/phenology/results_tmp/jetzvsy2002")
+
+
+# ESA CCI (land cover) ----------------------------------------------------------------------
+# read in land cover data
+system("r.mask -r")
+system('r.in.gdal in=NETCDF:"/media/marco/marcodata19/backupfrombigdisk/ESS_Drive/Marco/datasets/ESACCI_lcover/ESACCI-LC-L4-LCCS-Map-300m-P1Y-2002-v2.0.7.nc":lccs_class band=1 out=esa_2002 -o')
+# read in mask of unchanged forest
+#system("r.in.gdal in=/media/marco/marcodata19/validationmetrics/forest_unchanged_300m.tif out=forest_mask_unchanged_300m")
+system("g.region raster=mask_unchanged_300m")
+system("r.mask raster=mask_unchanged_300m maskcats=1")
+system("r.mapcalc 'esa_2002a = esa_2002' --o")
+
+# get stats for land cover (forest types)
+system("g.region raster=esa_2002a")
+system('r.mask raster=esa_2002a maskcats="50 60 61 61 62 70 71 72 80 81 82 90 100"')
+system("r.stats -an in=esa_2002a,grid_5km_mask_unchanged_500m > /media/marco/marcodata19/validationmetrics/pheno_grid_ESAvalues2002")
+
+
+

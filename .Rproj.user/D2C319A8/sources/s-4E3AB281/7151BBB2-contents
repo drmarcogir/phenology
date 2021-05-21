@@ -1,0 +1,4 @@
+system("earthengine ls users/marcogirardello/phenofixfailedexports > info")
+
+read_delim("info",delim=" ",col_names = FALSE) %>%
+  filter()

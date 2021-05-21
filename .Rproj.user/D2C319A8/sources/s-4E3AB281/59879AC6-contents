@@ -1,0 +1,10 @@
+
+
+  # upload to google cloud
+  #system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".shp gs://marco_g_assets/"))
+  #system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".shx gs://marco_g_assets/"))
+  #system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".dbf gs://marco_g_assets/"))
+  #system(command = paste0("gsutil cp /mnt/data1tb/Dropbox/phenology/tmp/poly_",gridfail[i,]$polyID,".prj gs://marco_g_assets/"))
+  # upload to assets
+  #system(command = paste0("earthengine upload table --asset_id=users/marcogirardello/phenofixfailedexports/poly_",gridfail[i,]$polyID," gs://marco_g_assets/poly_",gridfail[i,]$polyID,".shp"))
+}
